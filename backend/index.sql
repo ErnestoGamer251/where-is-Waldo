@@ -1,0 +1,22 @@
+CREATE TABLE images (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL
+);
+
+CREATE TABLE characters (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  x INT NOT NULL,
+  y INT NOT NULL,
+  tolerance INT NOT NULL,
+  image_id INT REFERENCES images(id)
+);
+
+CREATE TABLE high_scores (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  time INT NOT NULL,
+  image_id INT REFERENCES images(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

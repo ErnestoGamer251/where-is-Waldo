@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo Tagging Game - Select Image</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    #game-container {
+      position: relative;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    .target-box {
+      position: absolute;
+      border: 2px solid red;
+      width: 50px;
+      height: 50px;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+    select {
+      margin: 10px 0;
+    }
+    #timer {
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Photo Tagging Game</h1>
+
+  <!-- Selección de imagen -->
+  <label for="image-select">Select an image:</label>
+  <select id="image-select">
+    <!-- Las opciones se llenarán dinámicamente -->
+  </select>
+
+  <div id="game-container" style="display:none;">
+    <p id="timer">Time: 0 seconds</p>
+    <img id="game-image" src="" alt="Game Image">
+    <div id="target-box" class="target-box">
+      <select id="character-select">
+        <option value="">Choose a character</option>
+      </select>
+    </div>
+  </div>
+
+  <script>
+    const gameContainer = document.getElementById('game-container');
+    const gameImage = document.getElementById('game-image');
+    const targetBox = document.getElementById('target-box');
+    const characterSelect = document.getElementById('character-select');
+    const timerDisplay = document.getElementById('timer');
+    const imageSelect = document.getElementById('image-select');
+
+    let selectedCoords = { x: 0, y: 0 };
+    let startTime = null;
+    let foundCharacters = [];
+    let totalCharacters = 0;
+
+    // Cargar las imágenes desde el backend
+    async function loadImages() {
+      const response = await fetch('/get-images');
+      const images = await response.json();
+      images.forEach(image => {
+        const option = document.createElement('option');
+        option.value = image.id;
+        option.textContent = image.name;
+        imageSelect.appendChild(option);
+      });
+    }
+
+    // Cargar la imagen seleccionada y sus personajes
+    imageSelect.addEventListener('change', async () => {
+      const imageId = imageSelect.value;
+
+      if (imageId) {
+        const response = await fetch(`/get-image-data/${imageId}`);
+        const { imageUrl, characters } = await response.json();
+
+        gameImage.src = imageUrl;
+        totalCharacters = characters.length;
+        foundCharacters = [];
+
+        characterSelect.innerHTML = '<option value="">Choose a character</option>';
+        characters.forEach(character => {
+          const option = document.createElement('option');
+          option.value = character.name;
+          option.textContent = character.name;
+          characterSelect.appendChild(option);
+        });
+
+        gameContainer.style.display = 'block';
+      }
+    });
+
+    function startTimer() {
+      startTime = Date.now();
+      updateTimer();
+    }
+
+    function updateTimer() {
+      if (startTime) {
+        const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+        timerDisplay.textContent = `Time: ${elapsedTime} seconds`;
+        requestAnimationFrame(updateTimer);
+      }
+    }
+
+    function stopTimer() {
+      const totalTime = Math.floor((Date.now() - startTime) / 1000);
+      return totalTime;
+    }
+
+    gameImage.addEventListener('click', (event) => {
+      if (!startTime) startTimer();  // Start the timer on the first click
+
+      const rect = gameImage.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      selectedCoords = { x, y };
+      targetBox.style.left = `${x - 25}px`;
+      targetBox.style.top = `${y - 25}px`;
+      targetBox.style.display = 'flex';
+    });
+
+    gameContainer.addEventListener('click', (event) => {
+      if (event.target !== gameImage) {
+        targetBox.style.display = 'none';
+        characterSelect.value = '';
+      }
+    });
+
+    characterSelect.addEventListener('change', async () => {
+      const selectedCharacter = characterSelect.value;
+
+      if (selectedCharacter) {
+        const response = await fetch('/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            character: selectedCharacter,
+            coords: selectedCoords,
+            imageId: imageSelect.value  // Enviar también el ID de la imagen
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert('Correct! Character found!');
+          foundCharacters.push(selectedCharacter);
+
+          if (foundCharacters.length === totalCharacters) {
+            const totalTime = stopTimer();
+            alert(`You found all characters in ${totalTime} seconds!`);
+            const playerName = prompt('Enter your name for the high scores:');
+            await fetch('/submit-score', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ name: playerName, time: totalTime, imageId: imageSelect.value }),
+            });
+          }
+        } else {
+          alert('Wrong selection, try again.');
+        }
+        targetBox.style.display = 'none';
+        characterSelect.value = '';
+      }
+    });
+
+    // Cargar las imágenes al inicio
+    loadImages();
+  </script>
+</body>
+</html>
